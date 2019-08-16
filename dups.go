@@ -1,12 +1,12 @@
 package main
 
 import (
-	"crypto/md5"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 
+	"github.com/OneOfOne/xxhash"
 	"gopkg.in/gookit/color.v1"
 )
 
@@ -16,8 +16,8 @@ type dupInfo struct {
 }
 
 func PrintUsage() {
-	fmt.Println("Usage: dups PATH")
-	fmt.Println("PATH is the directory that will be recursively searched for duplicate files")
+	fmt.Println("Usage: dups DIRECTORY")
+	fmt.Println("DIRECTORY is the directory that will be recursively searched for duplicate files")
 }
 
 func PrintDupes(h map[string]*dupInfo) {
@@ -41,7 +41,7 @@ func main() {
 	}
 
 	hashes := map[string]*dupInfo{}
-	dupesExist := false
+	dupeCount := 0
 	err := filepath.Walk(args[0],
 		func(path string, info os.FileInfo, err error) error {
 			if err != nil {
@@ -59,7 +59,7 @@ func main() {
 			}
 			defer f.Close()
 
-			h := md5.New()
+			h := xxhash.New64()
 			if _, err := io.Copy(h, f); err != nil {
 				fmt.Println("Error reading file %s", path)
 				return err
@@ -67,7 +67,7 @@ func main() {
 
 			hashString := string(h.Sum(nil))
 			if val, ok := hashes[hashString]; ok {
-				dupesExist = true
+				dupeCount++
 				val.hasDupes = true
 				val.dupes = append(val.dupes, path)
 			} else {
@@ -85,11 +85,11 @@ func main() {
 		os.Exit(2)
 	}
 
-	if dupesExist {
-		fmt.Println("\nDuplicate files:")
+	if dupeCount > 0 {
+		color.Red.Printf("\n%d Files with duplicates found:\n", dupeCount)
 		PrintDupes(hashes)
 	} else {
-		fmt.Println("No duplicate files exist in the specified directory.")
+		color.Green.Println("No duplicate files exist in the specified directory.")
 	}
 
 }

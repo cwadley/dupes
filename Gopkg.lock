@@ -2,6 +2,14 @@
 
 
 [[projects]]
+  digest = "1:f2aa950b9738feb15ce4a6958f899969fc0908c9c6f9fad97fb4fb6bdd0f98ff"
+  name = "github.com/OneOfOne/xxhash"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "c1e3185f167680b62832a0a11938a04b1ab265fc"
+  version = "v1.2.5"
+
+[[projects]]
   digest = "1:4976cbb61cf59fc2c6bab209be0b0ab17749887e545e34de49740e508c0f6695"
   name = "gopkg.in/gookit/color.v1"
   packages = ["."]
@@ -12,6 +20,9 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  input-imports = ["gopkg.in/gookit/color.v1"]
+  input-imports = [
+    "github.com/OneOfOne/xxhash",
+    "gopkg.in/gookit/color.v1",
+  ]
   solver-name = "gps-cdcl"
   solver-version = 1
