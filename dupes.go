@@ -110,7 +110,7 @@ func ComputeHighwayHash(r io.Reader) (string, error) {
 func main() {
 	args := os.Args[1:]
 
-	if len(args) != 1 {
+	if len(args) < 1 {
 		PrintUsage()
 		os.Exit(1)
 	}
