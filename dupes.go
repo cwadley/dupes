@@ -8,9 +8,10 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"time"
 
-	"github.com/dghubble/trie"
 	"github.com/OneOfOne/xxhash"
+	"github.com/dghubble/trie"
 	"github.com/minio/highwayhash"
 	"gopkg.in/gookit/color.v1"
 )
@@ -31,8 +32,9 @@ func PrintDupes(t *trie.RuneTrie) {
 				dupes := d.([]string)
 				if len(dupes) > 1 {
 					color.Blue.Printf("Hash: %x\n", k)
-					for _, f := range dupes {
-						color.Yellow.Printf("\t%s\n", f)
+					for i, f := range dupes {
+						color.Red.Printf("\t%d ", i + 1)
+						color.Yellow.Printf("%s\n", f)
 					}
 					fmt.Println()
 				}
@@ -116,8 +118,17 @@ func main() {
 	h1Trie := trie.NewRuneTrie()
 	h2Trie := trie.NewRuneTrie()
 	dupeCount := 0
+	fileCount := 0
+	prevTime := time.Now().Unix()
 	err := filepath.Walk(args[0],
 		func(path string, info os.FileInfo, err error) error {
+			fileCount++
+			currTime := time.Now().Unix()
+			if currTime - prevTime >= 5 {
+				fmt.Println("Files processed:", fileCount)
+				prevTime = currTime
+			}
+
 			if err != nil {
 				return err
 			}
@@ -128,7 +139,7 @@ func main() {
 
 			r1, r2, err := GetDualReaders(path)
 			if err != nil {
-				fmt.Println("Error opening file %s", path)
+				fmt.Println("Error opening file", path)
 				return err
 			}
 
@@ -142,7 +153,7 @@ func main() {
 				// Compute hash2 of previouly seen file and add it to the trie
 				r3, err := GetSingleReader(exists.(string))
 				if err != nil {
-					fmt.Println("Error opening file %s", path)
+					fmt.Println("Error opening file", path)
 				}
 
 				hash2StringPrevFile, err := ComputeHighwayHash(r3)
@@ -150,7 +161,7 @@ func main() {
 					fmt.Println("Error computing HighwayHash")
 					return err
 				}
-				AddEntryToTrie(hash1String + hash2StringPrevFile, exists.(string), h2Trie)
+				AddEntryToTrie(hash1String+hash2StringPrevFile, exists.(string), h2Trie)
 
 				// Now compute hash2 of the current file
 				hash2String, err := ComputeHighwayHash(r2)
@@ -163,9 +174,9 @@ func main() {
 					dupeCount++
 					dupes := d.([]string)
 					dupes = append(dupes, path)
-					h2Trie.Put(hash1String + hash2String, dupes)
+					h2Trie.Put(hash1String+hash2String, dupes)
 				} else {
-					AddEntryToTrie(hash1String + hash2String, path, h2Trie)
+					AddEntryToTrie(hash1String+hash2String, path, h2Trie)
 				}
 			} else {
 				h1Trie.Put(hash1String, path)
@@ -174,7 +185,7 @@ func main() {
 		})
 
 	if err != nil {
-		fmt.Println("Error reading directory %s. Please ensure the directory exists.", args[0])
+		fmt.Printf("Error reading directory %s. Please ensure the directory exists.\n", args[0])
 		os.Exit(3)
 	}
 
