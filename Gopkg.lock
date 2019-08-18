@@ -10,6 +10,30 @@
   version = "v1.2.5"
 
 [[projects]]
+  branch = "master"
+  digest = "1:ab09ad1bfd316d6b213604119d76bd432bcce3d5589cbd9b7c6155ecfd5e138d"
+  name = "github.com/dghubble/trie"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "09498fbfbadbdb9cf6aebf4233c35e3c81fa72a3"
+
+[[projects]]
+  digest = "1:9027cf919c7a9a0577048c325829ad57c2f8b35b8be2dcf290a163b5a6be5a7f"
+  name = "github.com/minio/highwayhash"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "02ca4b43caa3297fbb615700d8800acc7933be98"
+  version = "v1.0.0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:9289797869517c73400e7b5a93beefbfc86e06f56e3ab03f38fb0d575e685277"
+  name = "golang.org/x/sys"
+  packages = ["cpu"]
+  pruneopts = "UT"
+  revision = "fde4db37ae7ad8191b03d30d27f258b5291ae4e3"
+
+[[projects]]
   digest = "1:4976cbb61cf59fc2c6bab209be0b0ab17749887e545e34de49740e508c0f6695"
   name = "gopkg.in/gookit/color.v1"
   packages = ["."]
@@ -22,6 +46,8 @@
   analyzer-version = 1
   input-imports = [
     "github.com/OneOfOne/xxhash",
+    "github.com/dghubble/trie",
+    "github.com/minio/highwayhash",
     "gopkg.in/gookit/color.v1",
   ]
   solver-name = "gps-cdcl"
