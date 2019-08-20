@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/OneOfOne/xxhash"
-	"github.com/dghubble/trie"
+	"github.com/xiaonanln/go-trie-tst"
 	"github.com/minio/highwayhash"
 	"gopkg.in/gookit/color.v1"
 )
@@ -25,9 +25,9 @@ func PrintUsage() {
 	fmt.Println("DIRECTORY is the directory that will be recursively searched for duplicate files")
 }
 
-func PrintDupes(t *trie.RuneTrie) {
-	t.Walk(
-		func(k string, d interface{}) error {
+func PrintDupes(t *trietst.TST) {
+	t.ForEach(
+		func(k string, d interface{}) {
 			if d != nil {
 				dupes := d.([]string)
 				if len(dupes) > 1 {
@@ -39,14 +39,13 @@ func PrintDupes(t *trie.RuneTrie) {
 					fmt.Println()
 				}
 			}
-			return nil
 		})
 }
 
-func AddEntryToTrie(key string, path string, trie *trie.RuneTrie) {
+func AddDupesToTST(key string, path string, t *trietst.TST) {
 	dupes := make([]string, 1)
 	dupes[0] = path
-	trie.Put(key, dupes)
+	t.Set(key, dupes)
 }
 
 func GetSingleReader(path string) (io.Reader, error) {
@@ -115,8 +114,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	h1Trie := trie.NewRuneTrie()
-	h2Trie := trie.NewRuneTrie()
+	var h1TST trietst.TST
+	var h2TST trietst.TST
 	dupeCount := 0
 	fileCount := 0
 	prevTime := time.Now().Unix()
@@ -149,7 +148,7 @@ func main() {
 				return err
 			}
 
-			if exists := h1Trie.Get(hash1String); exists != nil {
+			if exists := h1TST.Get(hash1String); exists != nil {
 				// Compute hash2 of previouly seen file and add it to the trie
 				r3, err := GetSingleReader(exists.(string))
 				if err != nil {
@@ -161,7 +160,7 @@ func main() {
 					fmt.Println("Error computing HighwayHash")
 					return err
 				}
-				AddEntryToTrie(hash1String+hash2StringPrevFile, exists.(string), h2Trie)
+				AddDupesToTST(hash1String+hash2StringPrevFile, exists.(string), &h2TST)
 
 				// Now compute hash2 of the current file
 				hash2String, err := ComputeHighwayHash(r2)
@@ -170,16 +169,16 @@ func main() {
 					return err
 				}
 
-				if d := h2Trie.Get(hash1String + hash2String); d != nil {
+				if d := h2TST.Get(hash1String + hash2String); d != nil {
 					dupeCount++
 					dupes := d.([]string)
 					dupes = append(dupes, path)
-					h2Trie.Put(hash1String+hash2String, dupes)
+					h2TST.Set(hash1String+hash2String, dupes)
 				} else {
-					AddEntryToTrie(hash1String+hash2String, path, h2Trie)
+					AddDupesToTST(hash1String+hash2String, path, &h2TST)
 				}
 			} else {
-				h1Trie.Put(hash1String, path)
+				h1TST.Set(hash1String, path)
 			}
 			return nil
 		})
@@ -191,7 +190,7 @@ func main() {
 
 	if dupeCount > 0 {
 		color.Red.Printf("%d Files with duplicates found:\n", dupeCount)
-		PrintDupes(h2Trie)
+		PrintDupes(&h2TST)
 	} else {
 		color.Green.Println("No duplicate files exist in the specified directory.")
 	}
