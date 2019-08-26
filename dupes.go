@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -20,12 +21,21 @@ import (
 // This is hardcoded to ensure consistent hashes for files across runs.
 const HH_KEY = "E9ECA1531393D174DFEA70CC5BAA4FCE5FC599D08ECB36B9961489985A64D3AE"
 
-func printUsage() {
-	fmt.Println("Usage: dupes DIRECTORY")
-	fmt.Println("DIRECTORY is the directory that will be recursively searched for duplicate files")
+type dupe struct {
+	Hash string `json:"hash"`
+	Files []string `json:"files"`
 }
 
-func printDupes(t *trietst.TST) {
+func printUsage() {
+	fmt.Println("Usage: dupes [OPTIONS] <dupe_directory>")
+	fmt.Println("\tdupe_directory is the directory that will be recursively searched for duplicate files")
+	fmt.Println("Options:")
+	fmt.Println("\t-j, --json <path> (Optional)")
+	fmt.Println("\t\tOutputs results as JSON to the specified file path")
+}
+
+func printDupes(t *trietst.TST, json_output bool, json_file string) error {
+	var json_dupes []dupe
 	t.ForEach(
 		func(k string, d interface{}) {
 			if d != nil {
@@ -37,9 +47,30 @@ func printDupes(t *trietst.TST) {
 						color.Yellow.Printf("%s\n", f)
 					}
 					fmt.Println()
+
+					if json_output {
+						var curr_dupe dupe
+						curr_dupe.Hash = k
+						curr_dupe.Files = dupes
+						json_dupes = append(json_dupes, curr_dupe)
+					}
 				}
 			}
 		})
+
+	if json_output {
+		json_data, err := json.Marshal(json_dupes)
+		if err != nil {
+			fmt.Println("Error marshalling output JSON")
+			return err
+		}
+		err = ioutil.WriteFile(json_file, json_data, 0644)
+		if err != nil {
+			fmt.Println("Error writing JSON file, please check permissions and that the directory exists.")
+			return err
+		}
+	}
+	return nil
 }
 
 func addDupesToTST(key string, path string, t *trietst.TST) {
@@ -108,10 +139,9 @@ func computeHighwayHash(r io.Reader) (string, error) {
 
 func processFile(path string, info os.FileInfo, err error, h1TST *trietst.TST, h2TST *trietst.TST,
 	dupeCount *int64, fileCount *int64, prevTime *int64) error {
-	fmt.Println("fileCount", *fileCount)
 	*fileCount++
 	currTime := time.Now().Unix()
-	if currTime - *prevTime >= 5 {
+	if currTime-*prevTime >= 5 {
 		fmt.Println("Files processed:", *fileCount)
 		*prevTime = currTime
 	}
@@ -148,7 +178,7 @@ func processFile(path string, info os.FileInfo, err error, h1TST *trietst.TST, h
 			fmt.Println("Error computing HighwayHash")
 			return err
 		}
-		addDupesToTST(hash1String + hash2StringPrevFile, exists.(string), h2TST)
+		addDupesToTST(hash1String+hash2StringPrevFile, exists.(string), h2TST)
 
 		// Now compute hash2 of the current file
 		hash2String, err := computeHighwayHash(r2)
@@ -161,14 +191,13 @@ func processFile(path string, info os.FileInfo, err error, h1TST *trietst.TST, h
 			*dupeCount++
 			dupes := d.([]string)
 			dupes = append(dupes, path)
-			h2TST.Set(hash1String + hash2String, dupes)
+			h2TST.Set(hash1String+hash2String, dupes)
 		} else {
-			addDupesToTST(hash1String + hash2String, path, h2TST)
+			addDupesToTST(hash1String+hash2String, path, h2TST)
 		}
 	} else {
 		h1TST.Set(hash1String, path)
 	}
-	fmt.Println("dupeCount", *dupeCount)
 	return nil
 }
 
@@ -180,12 +209,43 @@ func main() {
 		os.Exit(1)
 	}
 
+	json_output := false
+	var json_file string
+	dupeDir := ""
+	for i := 0; i < len(args); i++ {
+		if string(args[i][0]) == "-" {
+			switch flag := string(args[i][1:]); flag {
+			case "j", "-json":
+				if i+1 >= len(args) {
+					fmt.Println("Error: No JSON output file specified")
+					printUsage()
+					os.Exit(1)
+				}
+				json_output = true
+				json_file = args[i+1]
+				i++
+			default:
+				fmt.Println("Error: Invalid flag", args[i])
+				printUsage()
+				os.Exit(1)
+			}
+		} else {
+			dupeDir = args[i]
+		}
+	}
+
+	if dupeDir == "" {
+		fmt.Println("Error: No directory specified to scan for duplicate files")
+		printUsage()
+		os.Exit(1)
+	}
+
 	var h1TST trietst.TST
 	var h2TST trietst.TST
 	var dupeCount int64
 	var fileCount int64
 	prevTime := time.Now().Unix()
-	err := filepath.Walk(args[0],
+	err := filepath.Walk(dupeDir,
 		func(path string, info os.FileInfo, err error) error {
 			return processFile(path, info, err, &h1TST, &h2TST, &dupeCount, &fileCount, &prevTime)
 		})
@@ -197,7 +257,7 @@ func main() {
 
 	if dupeCount > 0 {
 		color.Red.Printf("%d Files with duplicates found:\n", dupeCount)
-		printDupes(&h2TST)
+		_ = printDupes(&h2TST, json_output, json_file)
 	} else {
 		color.Green.Println("No duplicate files exist in the specified directory.")
 	}
