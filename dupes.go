@@ -22,7 +22,7 @@ import (
 const HH_KEY = "E9ECA1531393D174DFEA70CC5BAA4FCE5FC599D08ECB36B9961489985A64D3AE"
 
 type dupe struct {
-	Hash string `json:"hash"`
+	Hash  string   `json:"hash"`
 	Files []string `json:"files"`
 }
 
@@ -157,7 +157,7 @@ func processFile(path string, info os.FileInfo, err error, h1TST *trietst.TST, h
 	r1, r2, err := getDualReaders(path)
 	if err != nil {
 		fmt.Println("Error opening file", path)
-		return err
+		return nil
 	}
 
 	hash1String, err := computeXXHash(r1)
@@ -171,6 +171,7 @@ func processFile(path string, info os.FileInfo, err error, h1TST *trietst.TST, h
 		r3, err := getSingleReader(exists.(string))
 		if err != nil {
 			fmt.Println("Error opening file", path)
+			return nil
 		}
 
 		hash2StringPrevFile, err := computeHighwayHash(r3)
@@ -251,7 +252,6 @@ func main() {
 		})
 
 	if err != nil {
-		fmt.Printf("Error reading directory %s. Please ensure the directory exists.\n", args[0])
 		os.Exit(3)
 	}
 
