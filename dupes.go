@@ -13,7 +13,7 @@ import (
 
 	"github.com/OneOfOne/xxhash"
 	"github.com/minio/highwayhash"
-	"github.com/xiaonanln/go-trie-tst"
+	"github.com/cornelk/hashmap"
 	"gopkg.in/gookit/color.v1"
 )
 
@@ -34,29 +34,28 @@ func printUsage() {
 	fmt.Println("\t\tOutputs results as JSON to the specified file path")
 }
 
-func printDupes(t *trietst.TST, json_output bool, json_file string) error {
+func printDupes(hm *hashmap.HashMap, json_output bool, json_file string) error {
 	var json_dupes []dupe
-	t.ForEach(
-		func(k string, d interface{}) {
-			if d != nil {
-				dupes := d.([]string)
-				if len(dupes) > 1 {
-					color.Blue.Printf("Hash: %x\n", k)
-					for i, f := range dupes {
-						color.Red.Printf("\t%d ", i+1)
-						color.Yellow.Printf("%s\n", f)
-					}
-					fmt.Println()
+	for e := range hm.Iter() {
+		if e.Value != nil {
+			dupes := e.Value.([]string)
+			if len(dupes) > 1 {
+				color.Blue.Printf("Hash: %x\n", e.Key.(string))
+				for i, f := range dupes {
+					color.Red.Printf("\t%d ", i+1)
+					color.Yellow.Printf("%s\n", f)
+				}
+				fmt.Println()
 
-					if json_output {
-						var curr_dupe dupe
-						curr_dupe.Hash = k
-						curr_dupe.Files = dupes
-						json_dupes = append(json_dupes, curr_dupe)
-					}
+				if json_output {
+					var curr_dupe dupe
+					curr_dupe.Hash = e.Key.(string)
+					curr_dupe.Files = dupes
+					json_dupes = append(json_dupes, curr_dupe)
 				}
 			}
-		})
+		}
+	}
 
 	if json_output {
 		json_data, err := json.Marshal(json_dupes)
@@ -73,10 +72,10 @@ func printDupes(t *trietst.TST, json_output bool, json_file string) error {
 	return nil
 }
 
-func addDupesToTST(key string, path string, t *trietst.TST) {
+func addDupesToHashMap(key string, path string, hm *hashmap.HashMap) {
 	dupes := make([]string, 1)
 	dupes[0] = path
-	t.Set(key, dupes)
+	hm.Set(key, dupes)
 }
 
 func getSingleReader(path string) (io.Reader, error) {
@@ -137,11 +136,11 @@ func computeHighwayHash(r io.Reader) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-func processFile(path string, info os.FileInfo, err error, h1TST *trietst.TST, h2TST *trietst.TST,
+func processFile(path string, info os.FileInfo, err error, h1HM *hashmap.HashMap, h2HM *hashmap.HashMap,
 	dupeCount *int64, fileCount *int64, prevTime *int64) error {
 	*fileCount++
 	currTime := time.Now().Unix()
-	if currTime-*prevTime >= 5 {
+	if currTime - *prevTime >= 5 {
 		fmt.Println("Files processed:", *fileCount)
 		*prevTime = currTime
 	}
@@ -166,9 +165,9 @@ func processFile(path string, info os.FileInfo, err error, h1TST *trietst.TST, h
 		return err
 	}
 
-	if exists := h1TST.Get(hash1String); exists != nil {
+	if val, ok := h1HM.GetStringKey(hash1String); ok {
 		// Compute hash2 of previouly seen file and add it to the trie
-		r3, err := getSingleReader(exists.(string))
+		r3, err := getSingleReader(val.(string))
 		if err != nil {
 			fmt.Println("Error opening file", path)
 			return nil
@@ -179,7 +178,7 @@ func processFile(path string, info os.FileInfo, err error, h1TST *trietst.TST, h
 			fmt.Println("Error computing HighwayHash")
 			return err
 		}
-		addDupesToTST(hash1String+hash2StringPrevFile, exists.(string), h2TST)
+		addDupesToHashMap(hash1String + hash2StringPrevFile, val.(string), h2HM)
 
 		// Now compute hash2 of the current file
 		hash2String, err := computeHighwayHash(r2)
@@ -188,16 +187,16 @@ func processFile(path string, info os.FileInfo, err error, h1TST *trietst.TST, h
 			return err
 		}
 
-		if d := h2TST.Get(hash1String + hash2String); d != nil {
+		if d, ok := h2HM.GetStringKey(hash1String + hash2String); ok {
 			*dupeCount++
 			dupes := d.([]string)
 			dupes = append(dupes, path)
-			h2TST.Set(hash1String+hash2String, dupes)
+			h2HM.Set(hash1String + hash2String, dupes)
 		} else {
-			addDupesToTST(hash1String+hash2String, path, h2TST)
+			addDupesToHashMap(hash1String + hash2String, path, h2HM)
 		}
 	} else {
-		h1TST.Set(hash1String, path)
+		h1HM.Set(hash1String, path)
 	}
 	return nil
 }
@@ -241,14 +240,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	var h1TST trietst.TST
-	var h2TST trietst.TST
+	h1HM := hashmap.New(1024)
+	h2HM := hashmap.New(1024)
 	var dupeCount int64
 	var fileCount int64
 	prevTime := time.Now().Unix()
 	err := filepath.Walk(dupeDir,
 		func(path string, info os.FileInfo, err error) error {
-			return processFile(path, info, err, &h1TST, &h2TST, &dupeCount, &fileCount, &prevTime)
+			return processFile(path, info, err, h1HM, h2HM, &dupeCount, &fileCount, &prevTime)
 		})
 
 	if err != nil {
@@ -257,7 +256,7 @@ func main() {
 
 	if dupeCount > 0 {
 		color.Red.Printf("%d Files with duplicates found:\n", dupeCount)
-		_ = printDupes(&h2TST, json_output, json_file)
+		_ = printDupes(h2HM, json_output, json_file)
 	} else {
 		color.Green.Println("No duplicate files exist in the specified directory.")
 	}
